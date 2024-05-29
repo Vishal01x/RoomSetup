@@ -1,0 +1,347 @@
+For remaining see Android Notes Room folder
+Update =1 :
+----------------- *** Room Database *** ----------------------------
+* There are 3 components in Room:
+    1. Database class :- it holds database and connect the app's data.
+    2. Data entities :- it represent tables in database.
+    3. Data access objects (DAOs) :- it provide methods that app can use to query, update, insert, and delete data in the database.
+
+
+* The database class provides your app with instances of the DAOs associated with that database. In turn, the app can use the DAOs to retrieve data from the database as instances
+ of the associated data entity objects. The app can also use the defined data entities to update rows from the corresponding tables, or to create new rows for insertion.
+
+
+
+*** Data entity :- Each entity corresponds to a table in the associated Room database, and each instance of an entity represents a row of data in the corresponding table.
+   we can use Room entities to define your database schema without writing any SQL code.
+   we define each Room entity as a class annotated with @Entity. A Room entity includes fields for each column in the corresponding table in the database.
+
+   By default, Room uses the class name as the database table name. If you want the table to have a different name, set the tableName property of the @Entity annotation.
+   Similarly, Room uses the field names as column names in the database by default. If you want a column to have a different name, add the @ColumnInfo annotation to the field and set the name property.
+
+ eg. -
+ @Entity (tableName = "users")
+ data class User(
+     @PrimaryKey val u  id: Int,
+     @ColumnInfo(name = "first_name") val firstName: String?,
+     @ColumnInfo(name = "last_name") val lastName: String?
+ )
+
+ Each instance of User represents a row in a user table in the app's database.
+
+ If you need instances of an entity to be uniquely identified by a combination of multiple columns, you can define a composite primary key by listing those columns in the primaryKeys property of @Entity:
+ eg. -
+ @Entity(primaryKeys = ["firstName", "lastName"])
+ data class User(
+     val firstName: String?,
+     val lastName: String?
+ )
+
+
+
+*** Data access object (DAO) :-  It provides the methods that the rest of the app uses to interact with data in the table.
+  You can define each DAO as either an interface or an abstract class. For basic use cases, you usually use an interface. In either case, you must always annotate your DAOs with @Dao. DAOs don't have properties,
+  but they do define one or more methods for interacting with the data in your app's database.
+
+eg. -
+@Dao
+interface UserDao {
+    @Query("SELECT * FROM user")
+    fun getAll(): List<User>
+
+    @Query("SELECT * FROM user WHERE uid IN (:userIds)")
+    fun loadAllByIds(userIds: IntArray): List<User>
+
+    @Query("SELECT * FROM user WHERE first_name LIKE :first AND " +
+           "last_name LIKE :last LIMIT 1")
+    fun findByName(first: String, last: String): User
+
+    @Insert
+    fun insertAll(vararg users: User)
+
+    @Delete
+    fun delete(user: User)
+}
+
+ * There are two types of DAO methods that define database interactions:
+
+ 1. Convenience methods that let you insert, update, and delete rows in your database without writing any SQL code.
+ 2. Query methods that let you write your own SQL query to interact with the database.
+
+for more detail :-
+https://developer.android.com/training/data-storage/room/accessing-data
+
+See Android Notes Room for full
+
+
+*** Database class :- it defines the database configuration and serves as the app's main access point to the persisted data. The database class must satisfy the following conditions:
+
+  1. The class must be annotated with a @Database annotation that includes an entities array that lists all of the data entities associated with the database.
+  2. The class must be an abstract class that extends RoomDatabase.
+  3. For each DAO class that is associated with the database, the database class must define an abstract method that has zero arguments and returns an instance of the DAO class.
+
+At runtime, you can acquire an instance of it via Room.databaseBuilder
+
+eg.- 1 :-
+
+@Database(entities = [User::class], version = 1)
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun userDao(): UserDao
+}
+
+eg. -2 :- In this example we use 2 tables and 2 DAO classes.
+
+@Database(entities = [User1::class, User2::class], version = 1)
+abstract class MyDatabase : RoomDatabase() {
+    abstract fun getUser1Dao(): User1Dao
+    abstract fun getUser2Dao(): User2Dao
+}
+
+
+For convenience, Room allows you to return LiveData from Query methods. It will automatically observe the related tables as long as the LiveData has active observers.
+
+// This live data will automatically dispatch changes as the database changes.
+@Query("SELECT * FROM User1 ORDER BY name LIMIT 5")
+abstract fun loadFirstFiveSongs(): LiveData<User1>;
+
+
+***  How to use the room database:-
+
+
+step -1 : After you have defined the data entity, the DAO, and the database object, you can use the following code to create an instance of the database:
+
+
+we use databaseBuilder(context: Context, klass :Class<T>, name : String) :Builder<T>  to get  RoomDatabaseBuilder<T>  to built database.
+by using build() method on this builder, we can create database instance.
+eg. -
+val db = Room.databaseBuilder(
+            applicationContext,
+            AppDatabase::class.java,
+            "database-name"
+        ).build()
+
+step -2 : You can then use the abstract methods from the AppDatabase to get an instance of the DAO. In turn, you can use the methods from the DAO instance to interact with the database:
+eg.-
+val userDao = db.userDao()
+val users: List<User> = userDao.getAll()
+
+
+
+
+// to know more in detail , see this website:-
+https://developer.android.com/codelabs/android-room-with-a-view-kotlin#9
+
+
+
+------------------------------ Update =2 ---------------------------------
+
+ Till now, we directly created the instance of database by:
+     database= Room.databaseBuilder(applicationContext,
+                 ContactDatabase::class.java,
+                 "contactDB").build()
+
+ This is not a good practice, here we using this method, every time, when we create the instance of database, a new database is create. To avoid this we use "Singleton Pattern"
+ to create the object.
+
+ Singleton Pattern:- A singleton object is a design pattern used in object-oriented programming where a class is designed to have only one instance created throughout
+ the lifetime of an application. This means that no matter how many times you try to instantiate the class, you'll always get the same instance back. It preventing multiple instances
+ from being created and avoiding issues such as inconsistent data or conflicting operations.
+ we usually create singleton object using companion object. companion object is defined in the same class. ou can access them directly using the class name, without needing an instance of the class.
+  eg.-
+
+  class MyClass {
+      companion object {
+          const val PI = 3.14
+          var counter = 0
+      }
+  }
+
+  fun main() {
+      println(MyClass.PI) // Accessing a constant property directly
+      println(MyClass.counter) // Accessing a mutable property directly
+
+      MyClass.counter++ // Modifying the value of a mutable property
+      println(MyClass.counter) // Accessing the modified value
+  }
+
+  now come to singleton Pattern object of database:
+
+  @Database(entities = [Contact::class], version = 1)
+  abstract class ContactDatabase :RoomDatabase(){
+
+      abstract fun contactDao():ContactDAO
+
+      //we are adding companion object to use singleton object:
+      companion object{
+          private var INSTANCE : ContactDatabase?=null
+          fun getDatabase(context: Context):ContactDatabase{
+              if (INSTANCE==null){
+                  INSTANCE= Room.databaseBuilder(
+                      context.applicationContext,
+                      ContactDatabase::class.java,
+                      "contactDB"
+                  ).build()
+              }
+              return INSTANCE!!
+          }
+      }
+  }
+  This will insure that the only one instance will be created. but as Room support multiple threading. It can be possible that multiple thread is trying to create instance at same time.
+  To prevent this we use lock block using synchronized(). synchronized method is a method which can be used by only one thread at a time. Other threads will be waiting until the method will be released.
+  synchronized(this) is used to ensure that the block of code inside it (creating and initializing the singleton instance) is only executed by one thread at a time.
+  This helps prevent multiple threads from concurrently creating multiple instances of the singleton.
+
+  now lets consider another scenario, let say many different thread is working on database and they update or modify the database. It may be that the main database is not updated, then if any thread will
+  access it, it may be possible that it will not get the updated data. for this we use "Volatile" keyword. Volatile is used on the variable directly.
+  “volatile” tells the compiler that the value of a variable must never be cached as its value may change outside of the scope of the program itself.
+
+
+  @Database(entities = [Contact::class], version = 1)
+  abstract class ContactDatabase :RoomDatabase(){
+
+      abstract fun contactDao():ContactDAO
+
+      //we are adding companion object to use singleton object:
+      companion object{
+          @Volatile
+          private var INSTANCE : ContactDatabase?=null
+          fun getDatabase(context: Context):ContactDatabase{
+
+              if (INSTANCE==null){
+                  synchronized(this) {
+                      INSTANCE = Room.databaseBuilder(
+                          context.applicationContext,
+                          ContactDatabase::class.java,
+                          "contactDB"
+                      ).build()
+                  }
+              }
+              return INSTANCE!!
+          }
+      }
+  }
+
+
+  ------------- update-3 -----------------
+
+  SQLite supports only following data structure: NULL, INTEGER, REAL, TEXT, BLOB
+  Suppose we have to store some different or complex information such as date or time. then we will use converter which will convert the complex data into appropriate SQLite data structure,
+  and when we retrieve it , converter will convert into its original data.
+
+  step-1: we have use "convertor" class for this in this project.
+  step-2:In contactDatabase we have annotated it using " @TypeConverters(Convertor::class) ";
+
+
+
+
+  ---------------------------- update-4 -------------------------
+
+  Suppose, we have launched new version 0f app and it includes some changes in room database such as we have added new entities(table) or new column in existing
+  table, or any new constrains, etc. We will have to insure that if the user will download new version of app, there existing data will not damage.
+  for this we use "migration" concept.
+
+  Room supports both automated and manual options for incremental migration. Automatic migrations work for most basic schema changes,
+  but you might need to manually define migration paths for more complex changes.
+
+
+  you should prefer:
+  https://developer.android.com/reference/kotlin/androidx/room/migration/Migration
+  https://developer.android.com/training/data-storage/room/migrating-db-versions
+
+  -------------------------**********-------------------------***************--------------------------------------------------------
+  Relationships in Entities -
+  @Embedded = this are used when we want to make nesting of objects in entities
+  @Transaction = when any function returns data from embedded object, related entities then it needs to perform more than one operation
+  or simple lan - This method requires Room to run two queries, so add the @Transaction annotation to this method so that the whole operation is performed atomically.
+
+  for relationship read the docs.
+
+  Best Practice : Recommended Codelab of Room see 10, 14,15
+  It is always recommended to declare the database obj in application class and use delegate by lazy :
+  by lazy -> it is used to instantiate only once when it is called for the first time that helps in preventing the unnecessary intialization of database
+
+  to do so in manifest file within application add name = "application class name"
+  so as app starts firstly this file will be run and then activity will created that's why needed to pass application context to run any process on backthread
+
+  class UserApplication : Application() {
+      // Using by lazy so the database and the repository are only created when they're needed
+      // rather than when the application starts
+      val database by lazy { UserDatabase.getDatabase(this) }
+
+  }
+
+  Populate the database :
+  when you want that whenver activity is created the whole database gets deleted and some fresh entry is added or
+  want to manage database when app is recreated then we can populate database
+  -> we pass the application context to databse class as fetching of data is done on backthread that requires context and this
+  doesn't depend on viewmodelscope,coroutines scope then you need to pass application context
+  then  using  this following code is used as it is based on Word but you can use as per need :
+
+  class WordsApplication : Application() {
+      // No need to cancel this scope as it'll be torn down with the process
+      val applicationScope = CoroutineScope(SupervisorJob())
+
+      // Using by lazy so the database and the repository are only created when they're needed
+      // rather than when the application starts
+      val database by lazy { WordRoomDatabase.getDatabase(this, applicationScope) }
+      val repository by lazy { WordRepository(database.wordDao()) }
+  }
+
+  then in database class :
+  @Database(entities = arrayOf(Word::class), version = 1, exportSchema = false)
+  abstract class WordRoomDatabase : RoomDatabase() {
+
+     abstract fun wordDao(): WordDao
+
+     private class WordDatabaseCallback(
+         private val scope: CoroutineScope
+     ) : RoomDatabase.Callback() {
+
+         override fun onCreate(db: SupportSQLiteDatabase) {
+             super.onCreate(db)
+             INSTANCE?.let { database ->
+                 scope.launch {
+                     var wordDao = database.wordDao()
+
+                     // Delete all content here.
+                     wordDao.deleteAll()
+
+                     // Add sample words.
+                     var word = Word("Hello")
+                     wordDao.insert(word)
+                     word = Word("World!")
+                     wordDao.insert(word)
+
+                     // TODO: Add your own words!
+                     word = Word("TODO!")
+                     wordDao.insert(word)
+                 }
+             }
+         }
+     }
+
+     companion object {
+         @Volatile
+         private var INSTANCE: WordRoomDatabase? = null
+
+         fun getDatabase(
+             context: Context,
+             scope: CoroutineScope
+         ): WordRoomDatabase {
+              // if the INSTANCE is not null, then return it,
+              // if it is, then create the database
+              return INSTANCE ?: synchronized(this) {
+                  val instance = Room.databaseBuilder(
+                          context.applicationContext,
+                          WordRoomDatabase::class.java,
+                          "word_database"
+                  )
+                   .addCallback(WordDatabaseCallback(scope))
+                   .build()
+                  INSTANCE = instance
+                  // return instance
+                  instance
+          }
+       }
+     }
+  }
